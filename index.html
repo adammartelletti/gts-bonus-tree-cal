@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Bonus Calculator</title>
+  <title>Bonus Calculator with Chart</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 p-6">
@@ -14,13 +14,7 @@
     <div class="flex flex-wrap gap-6">
       <div class="w-full md:w-1/4">
         <label class="block">Min Trees Per Day</label>
-        <input
-          type="number"
-          id="minTrees"
-          value="35"
-          oninput="renderTreeTable()"
-          class="w-full p-2 border rounded"
-        />
+        <input type="number" id="minTrees" value="35" oninput="renderTreeTable()" class="w-full p-2 border rounded" />
       </div>
       <div class="w-full md:w-1/4">
         <label class="block">Bonus Multiplier</label>
@@ -37,115 +31,82 @@
 
     <!-- Bonus Table -->
     <div id="results" class="mt-6"></div>
+
+    <!-- Chart -->
+    <div class="mt-6">
+      <h2 class="text-lg font-semibold mb-2">Payout vs. Difficulty</h2>
+      <canvas id="bonusChart" height="100"></canvas>
+    </div>
+
     <div class="mt-2 flex justify-end">
-      <button onclick="calculate()"
-              class="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-4 py-2 rounded">
-        Calculate
-      </button>
+      <button onclick="calculate()" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-4 py-2 rounded">Calculate</button>
     </div>
   </div>
 
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
     // === DATA ===
-    // five weekdays
-    let treeData = [
-      { id: "mon",  day: "Monday",    full: 0,  fullRate: 0,  half: 0,  halfRate: 0  },
-      { id: "tue",  day: "Tuesday",   full: 0,  fullRate: 0,  half: 0,  halfRate: 0  },
-      { id: "wed",  day: "Wednesday", full: 0,  fullRate: 0,  half: 0,  halfRate: 0  },
-      { id: "thurs",day: "Thursday",  full: 49, fullRate: 81, half: 61, halfRate: 47 },
-      { id: "fri",  day: "Friday",    full: 47, fullRate: 81, half: 33, halfRate: 47 }
+    const treeData = [
+      { id: 'mon',   day: 'Monday',    full: 0,  fullRate: 0,  half: 0,  halfRate: 0 },
+      { id: 'tue',   day: 'Tuesday',   full: 0,  fullRate: 0,  half: 0,  halfRate: 0 },
+      { id: 'wed',   day: 'Wednesday', full: 0,  fullRate: 0,  half: 0,  halfRate: 0 },
+      { id: 'thurs', day: 'Thursday',  full: 49, fullRate: 81, half: 61, halfRate: 47 },
+      { id: 'fri',   day: 'Friday',    full: 47, fullRate: 81, half: 33, halfRate: 47 }
     ];
 
-    // five core + two optional employee slots
-    let team = [
-      { name: "Brantt (C)",   bonus: 5 },
-      { name: "Tom (SF)",      bonus: 3 },
-      { name: "Gerald (TD)",  bonus: 1.5 },
-      { name: "Jai (L)",       bonus: 1 },
-      { name: "Jonathon (L)",  bonus: 1 },
-      { name: "",              bonus: 0 },  // optional #1
-      { name: "",              bonus: 0 }   // optional #2
+    const team = [
+      { name: 'Brantt (C)',   bonus: 5 },
+      { name: 'Tom (SF)',     bonus: 3 },
+      { name: 'Gerald (TD)',  bonus: 1.5 },
+      { name: 'Jai (L)',      bonus: 1 },
+      { name: 'Jonathon (L)', bonus: 1 },
+      { name: '',             bonus: 0 },
+      { name: '',             bonus: 0 }
     ];
 
     const modes = [
-      { key: 'all',           label: 'All Trees Count' },
-      { key: 'threshold',     label: 'Only Trees Above Threshold' },
-      { key: 'splitAll',      label: 'Split All Trees Evenly' },
-      { key: 'splitThreshold',label: 'Split Trees Above Threshold' }
+      { key: 'all',            label: 'All Trees Count' },
+      { key: 'threshold',      label: 'Only Trees Above Threshold' },
+      { key: 'splitAll',       label: 'Split All Trees Evenly' },
+      { key: 'splitThreshold', label: 'Split Trees Above Threshold' }
     ];
 
-    // === HELPERS ===
-
-    // Given full & half count + min threshold,
-    // return how many full / half are *above* threshold
     function filterEligible(full, half, minTrees) {
-      const weighted = full + half/2;
+      const weighted = full + half / 2;
       if (weighted <= minTrees) return { full: 0, half: 0 };
       const over = weighted - minTrees;
       const ratio = over / weighted;
       return { full: full * ratio, half: half * ratio };
     }
 
-    // === RENDER TREE TABLE ===
-
     function renderTreeTable() {
       const minTrees = +document.getElementById('minTrees').value;
-
-      // build each row
-      const rows = treeData.map(r => {
+      let rows = '';
+      treeData.forEach(r => {
         const fullRev = r.full * r.fullRate;
         const halfRev = r.half * r.halfRate;
         const e = filterEligible(r.full, r.half, minTrees);
-        const weightedElig = e.full + e.half/2;
-
-        return `
+        const weightedElig = e.full + e.half / 2;
+        rows += `
           <tr>
             <td class="border px-4 py-2">${r.day}</td>
-            <td class="border px-2 py-2 text-center">
-              <input type="number" id="${r.id}-full" value="${r.full}"
-                     class="w-16 p-1 border rounded text-center"
-                     oninput="updateTree('${r.id}')"/>
-            </td>
-            <td class="border px-2 py-2 text-center">
-              <input type="number" id="${r.id}-fullRate" value="${r.fullRate}"
-                     class="w-16 p-1 border rounded text-center"
-                     oninput="updateTree('${r.id}')"/>
-            </td>
-            <td class="border px-4 py-2 text-right" id="${r.id}-fullRev">
-              $${fullRev.toFixed(2)}
-            </td>
-            <td class="border px-2 py-2 text-center">
-              <input type="number" id="${r.id}-half" value="${r.half}"
-                     class="w-16 p-1 border rounded text-center"
-                     oninput="updateTree('${r.id}')"/>
-            </td>
-            <td class="border px-2 py-2 text-center">
-              <input type="number" id="${r.id}-halfRate" value="${r.halfRate}"
-                     class="w-16 p-1 border rounded text-center"
-                     oninput="updateTree('${r.id}')"/>
-            </td>
-            <td class="border px-4 py-2 text-right" id="${r.id}-halfRev">
-              $${halfRev.toFixed(2)}
-            </td>
-            <td class="border px-4 py-2 text-blue-700 font-semibold text-right" id="${r.id}-total">
-              $${(fullRev + halfRev).toFixed(2)}
-            </td>
-            <td class="border px-4 py-2 text-purple-700 text-center" id="${r.id}-eligible">
-              ${weightedElig.toFixed(2)}
-            </td>
+            <td class="border px-2 py-2 text-center"><input type="number" id="${r.id}-full" value="${r.full}" class="w-16 p-1 border rounded text-center" oninput="updateTree('${r.id}')"/></td>
+            <td class="border px-2 py-2 text-center"><input type="number" id="${r.id}-fullRate" value="${r.fullRate}" class="w-16 p-1 border rounded text-center" oninput="updateTree('${r.id}')"/></td>
+            <td class="border px-4 py-2 text-right" id="${r.id}-fullRev">$${fullRev.toFixed(2)}</td>
+            <td class="border px-2 py-2 text-center"><input type="number" id="${r.id}-half" value="${r.half}" class="w-16 p-1 border rounded text-center" oninput="updateTree('${r.id}')"/></td>
+            <td class="border px-2 py-2 text-center"><input type="number" id="${r.id}-halfRate" value="${r.halfRate}" class="w-16 p-1 border rounded text-center" oninput="updateTree('${r.id}')"/></td>
+            <td class="border px-4 py-2 text-right" id="${r.id}-halfRev">$${halfRev.toFixed(2)}</td>
+            <td class="border px-4 py-2 text-blue-700 font-semibold text-right" id="${r.id}-total">$${(fullRev + halfRev).toFixed(2)}</td>
+            <td class="border px-4 py-2 text-purple-700 text-center" id="${r.id}-eligible">${weightedElig.toFixed(2)}</td>
           </tr>
         `;
       });
-
-      // grand totals
-      const totalRev = treeData.reduce((sum, r) =>
-        sum + r.full*r.fullRate + r.half*r.halfRate, 0
-      );
+      const totalRev = treeData.reduce((sum, r) => sum + r.full * r.fullRate + r.half * r.halfRate, 0);
       const totalElig = treeData.reduce((sum, r) => {
         const e = filterEligible(r.full, r.half, +document.getElementById('minTrees').value);
-        return sum + e.full + e.half/2;
+        return sum + e.full + e.half / 2;
       }, 0);
-
       document.getElementById('treeTable').innerHTML = `
         <h2 class="text-lg font-semibold mb-2">Tree Work (Editable)</h2>
         <table class="w-full table-auto border text-sm">
@@ -167,169 +128,114 @@
             </tr>
           </thead>
           <tbody>
-            ${rows.join('')}
+            ${rows}
             <tr class="bg-gray-50 font-bold text-blue-700">
               <td colspan="7" class="border px-4 py-2 text-right">Total</td>
-              <td id="tree-total-revenue" class="border px-4 py-2 text-right">
-                $${totalRev.toFixed(2)}
-              </td>
-              <td id="tree-total-eligible" class="border px-4 py-2 text-center text-purple-700">
-                ${totalElig.toFixed(2)}
-              </td>
+              <td class="border px-4 py-2 text-right">$${totalRev.toFixed(2)}</td>
+              <td class="border px-4 py-2 text-center text-purple-700">${totalElig.toFixed(2)}</td>
             </tr>
           </tbody>
         </table>
       `;
-
-      // keep bottom table in sync
       calculate();
     }
 
-    // Recalc a single row + footer whenever a tree cell changes
     function updateTree(id) {
       const r = treeData.find(x => x.id === id);
-      r.full     = +document.getElementById(`${id}-full`).value;
+      r.full = +document.getElementById(`${id}-full`).value;
       r.fullRate = +document.getElementById(`${id}-fullRate`).value;
-      r.half     = +document.getElementById(`${id}-half`).value;
+      r.half = +document.getElementById(`${id}-half`).value;
       r.halfRate = +document.getElementById(`${id}-halfRate`).value;
-
       const fullRev = r.full * r.fullRate;
       const halfRev = r.half * r.halfRate;
       document.getElementById(`${id}-fullRev`).innerText = `$${fullRev.toFixed(2)}`;
       document.getElementById(`${id}-halfRev`).innerText = `$${halfRev.toFixed(2)}`;
-      document.getElementById(`${id}-total`).innerText   = `$${(fullRev + halfRev).toFixed(2)}`;
-
+      document.getElementById(`${id}-total`).innerText = `$${(fullRev + halfRev).toFixed(2)}`;
       const e = filterEligible(r.full, r.half, +document.getElementById('minTrees').value);
       document.getElementById(`${id}-eligible`).innerText = (e.full + e.half/2).toFixed(2);
-
-      // update footers
-      const totalRev = treeData.reduce((s, x) => s + x.full*x.fullRate + x.half*x.halfRate, 0);
-      document.getElementById('tree-total-revenue').innerText = `$${totalRev.toFixed(2)}`;
-      const totalElig = treeData.reduce((sum, x) => {
-        const f = filterEligible(x.full, x.half, +document.getElementById('minTrees').value);
-        return sum + f.full + f.half/2;
-      }, 0);
-      document.getElementById('tree-total-eligible').innerText = totalElig.toFixed(2);
-
-      calculate();
-    }
-
-    // === BONUS TABLE ===
-
-    // update an optional employee’s name
-    function updateName(idx) {
-      team[idx].name = document.getElementById(`name-${idx}`).value;
+      renderTreeTable();
     }
 
     function calculate() {
-      // read any edited bonuses
+      // refresh optional names & bonuses
       team.forEach((m,i) => {
-        const v = document.getElementById(`bonus-${i}`)?.value;
+        const v = document.getElementById(`bonus-` + i)?.value;
         m.bonus = v === '' ? 0 : +v;
       });
-
-      const minTrees   = +document.getElementById('minTrees').value;
+      const minTrees = +document.getElementById('minTrees').value;
       const multiplier = +document.getElementById('bonusMultiplier').value;
-
-      // raw counts by day
-      const counts = treeData.reduce((o, r) => {
+      // helper to get raw counts
+      const counts = treeData.reduce((o,r) => {
         o[r.id+'Full'] = r.full;
         o[r.id+'Half'] = r.half;
         return o;
       }, {});
-
-      // get eligible counts for a mode
       function getElig(key) {
-        if (!key.toLowerCase().includes('threshold')) {
-          return { ...counts };
-        }
+        if (!key.includes('threshold')) return {...counts};
         const out = {};
-        Object.keys(counts).forEach(k => {
-          const [day, type] = k.match(/(.*?)(Full|Half)$/).slice(1);
-          const f = filterEligible(
-            treeData.find(d=>d.id===day).full,
-            treeData.find(d=>d.id===day).half,
-            minTrees
-          );
-          out[day+'Full'] = f.full;
-          out[day+'Half'] = f.half;
+        treeData.forEach(d => {
+          const f = filterEligible(d.full,d.half,minTrees);
+          out[d.id+'Full'] = f.full;
+          out[d.id+'Half'] = f.half;
         });
         return out;
       }
-
       function modeBonus(key, rate) {
         const e = getElig(key);
-        // sum, weighting halves by .5 only in threshold modes
-        const sumTrees = Object.entries(e).reduce((s,[k,v]) => {
-          return s + (k.endsWith('Half') && key.toLowerCase().includes('threshold')
-            ? v/2
-            : v);
-        }, 0);
-        const base = key.startsWith('split')
-          ? (sumTrees/team.length)*rate
-          : sumTrees*rate;
-        return base*multiplier;
+        const sum = Object.entries(e).reduce((s,[k,v]) =>
+          s + (k.endsWith('Half') ? v/2 : v)
+        ,0);
+        const base = key.startsWith('split') ? (sum/team.length)*rate : sum*rate;
+        return base * multiplier;
       }
 
-      // build table
-      let html = `
-        <table class="w-full table-auto border text-sm">
-          <thead class="bg-gray-200">
-            <tr>
-              <th class="border px-4 py-2">Name</th>
-              ${modes.map(m=>`<th class="border px-4 py-2">${m.label}</th>`).join('')}
-              <th class="border px-4 py-2">Rate ($)</th>
-            </tr>
-          </thead>
-          <tbody>`;
-
+      // build bonus table
+      let html = `<table class="w-full table-auto border text-sm"><thead class="bg-gray-200"><tr><th class="border px-4 py-2">Name</th>${modes.map(m=>`<th class="border px-4 py-2">${m.label}</th>`).join('')}<th class="border px-4 py-2">Rate ($)</th></tr></thead><tbody>`;
       const totals = {};
       team.forEach((m,i) => {
-        html += `<tr>`;
-        // name cell (editable for optional rows)
-        html += `<td class="border px-4 py-2">`;
-        html += `<input type="text" id="name-${i}" value="${m.name}"
-                         placeholder="Employee name"
-                         class="w-full p-1 border rounded text-sm"
-                         oninput="updateName(${i})"/>`;
-        html += `</td>`;
-
+        html += `<tr><td class="border px-4 py-2"><input type="text" id="name-${i}" value="${m.name}" placeholder="Employee name" class="w-full p-1 border rounded text-sm" oninput="() => { m.name = this.value }"/></td>`;
         modes.forEach(md => {
           const b = modeBonus(md.key, m.bonus);
           totals[md.key] = (totals[md.key]||0) + b;
           html += `<td class="border px-4 py-2 text-center">$${b.toFixed(2)}</td>`;
         });
-
-        html += `<td class="border px-4 py-2 text-center">
-                   <input type="number" id="bonus-${i}" value="${m.bonus}"
-                          step="0.25" class="w-20 p-1 border rounded text-center"/>
-                 </td>`;
-        html += `</tr>`;
+        html += `<td class="border px-4 py-2 text-center"><input type="number" id="bonus-${i}" value="${m.bonus}" step="0.25" class="w-20 p-1 border rounded text-center" onchange="calculate()"/></td></tr>`;
       });
-
-      // total bonus
-      html += `<tr class="font-bold bg-gray-100">
-        <td class="border px-4 py-2">Total Bonus Paid</td>`;
-      modes.forEach(m => {
-        html += `<td class="border px-4 py-2 text-center">$${(totals[m.key]||0).toFixed(2)}</td>`;
-      });
-      html += `<td class="border"></td></tr>`;
-
-      // net revenue
+      // totals row
+      html += `<tr class="font-bold bg-gray-100"><td class="border px-4 py-2">Total Bonus Paid</td>${modes.map(m=>`<td class="border px-4 py-2 text-center">$${(totals[m.key]||0).toFixed(2)}</td>`).join('')}<td class="border"></td></tr>`;
+      // net revenue row
       const contractRev = treeData.reduce((s,r)=>s + r.full*r.fullRate + r.half*r.halfRate,0);
-      html += `<tr class="text-green-700 font-semibold bg-gray-50">
-        <td class="border px-4 py-2">Net Revenue</td>`;
-      modes.forEach(m => {
-        const net = contractRev - (totals[m.key]||0);
-        html += `<td class="border px-4 py-2 text-center">$${net.toFixed(2)}</td>`;
-      });
-      html += `<td class="border"></td></tr>`;
-
+      html += `<tr class="text-green-700 font-semibold bg-gray-50"><td class="border px-4 py-2">Net Revenue</td>${modes.map(m=>`<td class="border px-4 py-2 text-center">$${(contractRev - (totals[m.key]||0)).toFixed(2)}</td>`).join('')}<td class="border"></td></tr>`;
       html += `</tbody></table>`;
       document.getElementById('results').innerHTML = html;
+
+      // chart
+      const diffLevels = [
+        {label:'Easy (0.8×)', mult:0.8},
+        {label:'Normal (1.0×)', mult:1.0},
+        {label:'Hard (1.2×)', mult:1.2}
+      ];
+      const labels = team.map(m=>m.name||'—');
+      const datasets = diffLevels.map(dl=>({
+        label: dl.label,
+        data: team.map(m=>{
+          // compute base payout without multiplier
+          const raw = modeBonus('all', m.bonus);
+          const base = raw / multiplier;
+          return +(base * dl.mult).toFixed(2);
+        }),
+        backgroundColor: 'rgba(0,0,255,0.3)',
+        borderWidth: 1
+      }));
+      const ctx = document.getElementById('bonusChart').getContext('2d');
+      if (window.bonusChart) window.bonusChart.destroy();
+      window.bonusChart = new Chart(ctx, {
+        type: 'bar',
+        data: { labels, datasets },
+        options: { responsive:true, scales:{y:{beginAtZero:true,title:{display:true,text:'Bonus ($)'}}} }
+      });
     }
 
-    // initial render
     window.onload = renderTreeTable;
   </script>
 </body>
